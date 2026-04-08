@@ -1,0 +1,342 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  CUSTOMER
+  HOTEL_ADMIN
+  HOTEL_STAFF
+  SUPER_ADMIN
+  RECEPTION
+  CASHIER
+  HOUSEKEEPING
+}
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum RecordStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum DocumentType {
+  CC
+  CE
+  TI
+  PASSPORT
+  OTHER
+}
+
+enum BookingStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+  CHECKED_IN
+  COMPLETED
+  NO_SHOW
+}
+
+enum BookingOrigin {
+  WEB
+  FRONT_DESK
+  PHONE
+  WHATSAPP
+  AGENCY
+  WALK_IN
+  OTHER
+}
+
+enum RoomStatus {
+  AVAILABLE
+  OCCUPIED
+  CLEANING
+  MAINTENANCE
+}
+
+enum RoomGeneralStatus {
+  AVAILABLE
+  OCCUPIED
+  RESERVED
+  CLEANING
+  MAINTENANCE
+  OUT_OF_SERVICE
+}
+
+enum CleaningStatus {
+  CLEAN
+  PENDING
+  IN_PROGRESS
+}
+
+enum MaintenanceStatus {
+  NORMAL
+  REVIEW
+  BLOCKED
+}
+
+enum PaymentType {
+  ADVANCE
+  PAYMENT
+  REFUND
+  ADJUSTMENT
+}
+
+enum PaymentMethod {
+  CASH
+  DEBIT_CARD
+  CREDIT_CARD
+  TRANSFER
+  QR
+  MIXED
+}
+
+enum PaymentStatus {
+  PENDING
+  PARTIAL
+  PAID
+  VOID
+  REFUNDED
+}
+
+enum ShiftStatus {
+  OPEN
+  CLOSED
+}
+
+model Hotel {
+  id                Int       @id @default(autoincrement())
+  name              String
+  slug              String    @unique
+  description       String?
+  city              String
+  address           String
+  neighborhood      String?
+  stars             Int       @default(3)
+  rating            Float     @default(0)
+  coverImage        String?
+  amenities         String?
+  active            Boolean   @default(true)
+  checkInHour       String    @default("15:00")
+  checkOutHour      String    @default("12:00")
+  taxPercent        Float     @default(0)
+  currency          String    @default("COP")
+  reservationPrefix String    @default("RES")
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  rooms             Room[]
+  staff             User[]
+  bookings          Booking[]
+  clients           Client[]
+  guests            Guest[]
+  payments          Payment[]
+  shifts            Shift[]
+}
+
+model User {
+  id               Int        @id @default(autoincrement())
+  firstName        String
+  lastName         String
+  email            String     @unique
+  username         String?    @unique
+  document         String?
+  passwordHash     String
+  phone            String?
+  role             UserRole   @default(CUSTOMER)
+  status           UserStatus @default(ACTIVE)
+  hotelId          Int?
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
+  hotel            Hotel?     @relation(fields: [hotelId], references: [id])
+  customerBookings Booking[]  @relation("CustomerBookings")
+  createdBookings  Booking[]  @relation("CreatedBookings")
+  managedBookings  Booking[]  @relation("ManagedBookings")
+  payments         Payment[]  @relation("RegisteredPayments")
+  shifts           Shift[]
+}
+
+model Client {
+  id             Int          @id @default(autoincrement())
+  hotelId        Int
+  firstName      String
+  lastName       String
+  documentType   DocumentType @default(CC)
+  documentNumber String?
+  primaryPhone   String
+  email          String?
+  city           String?
+  country        String?
+  notes          String?
+  status         RecordStatus @default(ACTIVE)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  hotel          Hotel        @relation(fields: [hotelId], references: [id], onDelete: Cascade)
+  bookings       Booking[]
+
+  @@index([hotelId, createdAt])
+  @@index([hotelId, email])
+  @@index([hotelId, documentNumber])
+}
+
+model Guest {
+  id               Int          @id @default(autoincrement())
+  hotelId          Int
+  firstName        String
+  lastName         String
+  documentType     DocumentType?
+  documentNumber   String?
+  relationToClient String?
+  phone            String?
+  isMinor          Boolean      @default(false)
+  status           RecordStatus @default(ACTIVE)
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+  hotel            Hotel        @relation(fields: [hotelId], references: [id], onDelete: Cascade)
+  bookingGuests    BookingGuest[]
+
+  @@index([hotelId, createdAt])
+}
+
+model Room {
+  id                Int               @id @default(autoincrement())
+  hotelId           Int
+  name              String
+  code              String
+  number            String?
+  reference         String?
+  type              String
+  floor             Int?
+  bedCount          Int               @default(1)
+  bedType           String?
+  capacity          Int
+  maxCapacity       Int
+  pricePerNight     Float
+  basePrice         Float
+  seasonalPrice     Float?
+  description       String?
+  amenities         String?
+  status            RoomStatus        @default(AVAILABLE)
+  generalStatus     RoomGeneralStatus @default(AVAILABLE)
+  cleaningStatus    CleaningStatus    @default(CLEAN)
+  maintenanceStatus MaintenanceStatus @default(NORMAL)
+  active            Boolean           @default(true)
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  hotel             Hotel             @relation(fields: [hotelId], references: [id], onDelete: Cascade)
+  bookings          Booking[]
+
+  @@unique([hotelId, code])
+  @@unique([hotelId, number])
+}
+
+model Booking {
+  id                  Int           @id @default(autoincrement())
+  reference           String        @unique
+  hotelId             Int
+  roomId              Int
+  customerId          Int?
+  clientId            Int?
+  createdById         Int?
+  managedById         Int?
+  guestName           String
+  guestEmail          String
+  guestPhone          String?
+  guests              Int
+  adultCount          Int           @default(1)
+  minorCount          Int           @default(0)
+  checkIn             DateTime
+  checkOut            DateTime
+  actualCheckInAt     DateTime?
+  actualCheckOutAt    DateTime?
+  estimatedArrivalTime String?
+  nights              Int
+  pricePerNight       Float
+  subtotal            Float?
+  taxes               Float         @default(0)
+  discounts           Float         @default(0)
+  totalPrice          Float
+  advancePaid         Float         @default(0)
+  pendingBalance      Float         @default(0)
+  status              BookingStatus @default(PENDING)
+  origin              BookingOrigin @default(WEB)
+  observations        String?
+  specialRequests     String?
+  groupNotes          String?
+  emergencyGroupNotes String?
+  requiresSpecialCare Boolean       @default(false)
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
+  hotel               Hotel         @relation(fields: [hotelId], references: [id], onDelete: Cascade)
+  room                Room          @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  customer            User?         @relation("CustomerBookings", fields: [customerId], references: [id], onDelete: SetNull)
+  client              Client?       @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  createdBy           User?         @relation("CreatedBookings", fields: [createdById], references: [id], onDelete: SetNull)
+  managedBy           User?         @relation("ManagedBookings", fields: [managedById], references: [id], onDelete: SetNull)
+  guestsList          BookingGuest[]
+  payments            Payment[]
+
+  @@index([hotelId, status])
+  @@index([roomId, checkIn, checkOut])
+  @@index([customerId, createdAt])
+  @@index([clientId, createdAt])
+}
+
+model BookingGuest {
+  id            Int      @id @default(autoincrement())
+  bookingId     Int
+  guestId       Int
+  isPrimaryGuest Boolean @default(false)
+  createdAt     DateTime @default(now())
+  booking       Booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  guest         Guest    @relation(fields: [guestId], references: [id], onDelete: Cascade)
+
+  @@unique([bookingId, guestId])
+}
+
+model Payment {
+  id                     Int           @id @default(autoincrement())
+  hotelId                Int
+  bookingId              Int
+  totalReservationAmount Float
+  amountPaid             Float
+  pendingBalanceAfter    Float
+  type                   PaymentType   @default(PAYMENT)
+  method                 PaymentMethod
+  reference              String?
+  notes                  String?
+  status                 PaymentStatus @default(PARTIAL)
+  paymentDate            DateTime      @default(now())
+  registeredById         Int
+  booking                Booking       @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  hotel                  Hotel         @relation(fields: [hotelId], references: [id], onDelete: Cascade)
+  registeredBy           User          @relation("RegisteredPayments", fields: [registeredById], references: [id])
+
+  @@index([hotelId, paymentDate])
+}
+
+model Shift {
+  id             Int         @id @default(autoincrement())
+  hotelId        Int
+  userId         Int
+  date           DateTime
+  openedAt       DateTime
+  closedAt       DateTime?
+  openingCash    Float
+  closingCash    Float?
+  shiftIncome    Float       @default(0)
+  shiftExpenses  Float       @default(0)
+  cashDifference Float?
+  notes          String?
+  status         ShiftStatus @default(OPEN)
+  hotel          Hotel       @relation(fields: [hotelId], references: [id], onDelete: Cascade)
+  user           User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([hotelId, date])
+}
